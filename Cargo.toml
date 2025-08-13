@@ -6,9 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.99"
 jupyter-protocol = { git = "https://github.com/runtimed/runtimed", version = "0.8.1" }
-r3bl_tui = "0.7.3"
 runtimelib = { git = "https://github.com/runtimed/runtimed", version = "0.28.0", features = ["tokio", "tokio-runtime"] }
-rustyline = "17.0.0"
 rustyline-async = "0.4.7"
 serde_json = "1.0.142"
 tokio = { version = "1.47.1", features = ["full"] }

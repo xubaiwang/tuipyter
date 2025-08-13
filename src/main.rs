@@ -1,10 +1,10 @@
 //! This is the example from `runtimelib`, but changed to use deno.
 use std::{env, io::Write};
 
-use r3bl_tui::{ReadlineAsyncContext, ReadlineEvent};
 use runtimelib::{
     ConnectionInfo, ExecuteRequest, ExecutionState, JupyterMessage, JupyterMessageContent,
 };
+use rustyline_async::{Readline, ReadlineEvent};
 use uuid::Uuid;
 
 #[tokio::main]
@@ -71,15 +71,7 @@ async fn main() -> anyhow::Result<()> {
     //     runtimelib::create_client_control_connection(&connection_info, &session_id).await?;
 
     // 在初始化连接之后再创建 REPL
-    let mut rl_ctx = ReadlineAsyncContext::try_new(Some("> "))
-        .await
-        .unwrap()
-        .unwrap();
-    let mut shared_writer = rl_ctx.clone_shared_writer();
-    let ReadlineAsyncContext {
-        readline: ref mut rl,
-        ..
-    } = rl_ctx;
+    let (mut rl, mut writer) = Readline::new("> ".to_string()).unwrap();
 
     loop {
         match rl.readline().await {
@@ -106,20 +98,17 @@ async fn main() -> anyhow::Result<()> {
                                                 .map(|h| h.msg_id.as_str())
                                                 == Some(execute_request_id.as_str())
                                         {
-                                            writeln!(
-                                                shared_writer,
-                                                "Execution finalized, exiting..."
-                                            )
-                                            .unwrap();
+                                            writeln!(writer, "Execution finalized, exiting...")
+                                                .unwrap();
                                             break;
                                         }
                                     }
                                     _ => {
-                                        writeln!(shared_writer, "{:?}", message.content).unwrap();
+                                        writeln!(writer, "{:?}", message.content).unwrap();
                                     }
                                 },
                                 Err(e) => {
-                                    writeln!(shared_writer, "Error receiving iopub message: {}", e)
+                                    writeln!(writer, "Error receiving iopub message: {}", e)
                                         .unwrap();
                                     break;
                                 }
@@ -135,10 +124,5 @@ async fn main() -> anyhow::Result<()> {
 
     process.start_kill()?;
 
-    rl_ctx
-        .request_shutdown(Some("Shutting down..."))
-        .await
-        .unwrap();
-    rl_ctx.await_shutdown().await;
     Ok(())
 }
