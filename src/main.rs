@@ -1,9 +1,7 @@
 //! This is the example from `runtimelib`, but changed to use deno.
 use std::{env, io::Write};
 
-use runtimelib::{
-    ConnectionInfo, ExecuteRequest, ExecutionState, JupyterMessage, JupyterMessageContent,
-};
+use runtimelib::{ConnectionInfo, ExecuteRequest, JupyterMessage};
 use rustyline_async::{Readline, ReadlineEvent};
 use uuid::Uuid;
 
@@ -73,6 +71,21 @@ async fn main() -> anyhow::Result<()> {
     // 在初始化连接之后再创建 REPL
     let (mut rl, mut writer) = Readline::new("> ".to_string()).unwrap();
 
+    tokio::spawn(async move {
+        loop {
+            // 监听状态
+            match iopub_socket.read().await {
+                Ok(message) => {
+                    writeln!(writer, "{:?}", message.content).unwrap();
+                }
+                Err(e) => {
+                    writeln!(writer, "Error receiving iopub message: {}", e).unwrap();
+                    break;
+                }
+            }
+        }
+    });
+
     loop {
         match rl.readline().await {
             Ok(event) => {
@@ -81,39 +94,8 @@ async fn main() -> anyhow::Result<()> {
                         // 执行请求
                         let execute_request = ExecuteRequest::new(line);
                         let execute_request: JupyterMessage = execute_request.into();
-                        let execute_request_id = execute_request.header.msg_id.clone();
 
                         shell_socket.send(execute_request).await?;
-
-                        loop {
-                            // 监听状态
-                            match iopub_socket.read().await {
-                                Ok(message) => match message.content {
-                                    JupyterMessageContent::Status(status) => {
-                                        // 等待空闲退出
-                                        if status.execution_state == ExecutionState::Idle
-                                            && message
-                                                .parent_header
-                                                .as_ref()
-                                                .map(|h| h.msg_id.as_str())
-                                                == Some(execute_request_id.as_str())
-                                        {
-                                            writeln!(writer, "Execution finalized, exiting...")
-                                                .unwrap();
-                                            break;
-                                        }
-                                    }
-                                    _ => {
-                                        writeln!(writer, "{:?}", message.content).unwrap();
-                                    }
-                                },
-                                Err(e) => {
-                                    writeln!(writer, "Error receiving iopub message: {}", e)
-                                        .unwrap();
-                                    break;
-                                }
-                            }
-                        }
                     }
                     _ => break,
                 }
